@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Máquina de Reels</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#16161a;--mut:#6b6b76;--line:#e6e4df;--acc:#ff4d2e;--ok:#1f9d55;--err:#d6333a}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--card:#1b1b20;--ink:#f2f2f4;--mut:#9a9aa6;--line:#2b2b33}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+textarea,input,select{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+textarea{min-height:90px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.row>*{flex:1 1 140px}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 16px;cursor:pointer;background:var(--acc);color:#fff}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:default}
+label.chk{display:flex;gap:8px;align-items:center;color:var(--mut)}
+label.chk input{width:auto}
+.ideas{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.ideas span{font-size:13px;border:1px solid var(--line);border-radius:99px;padding:4px 10px;cursor:pointer;color:var(--mut)}
+.bar{display:flex;justify-content:space-between;align-items:center;margin:26px 0 12px;gap:10px;flex-wrap:wrap}
+.bar h2{font-size:18px;margin:0}
+.stats{color:var(--mut);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.job{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.media{aspect-ratio:9/16;background:linear-gradient(135deg,#ececec,#dcdcdc);display:grid;place-items:center;position:relative}
+@media (prefers-color-scheme:dark){.media{background:linear-gradient(135deg,#24242b,#1d1d23)}}
+.media img,.media video{width:100%;height:100%;object-fit:cover;display:block}
+.badge{position:absolute;top:8px;left:8px;font-size:12px;font-weight:600;padding:3px 8px;border-radius:99px;background:rgba(0,0,0,.6);color:#fff}
+.badge.ok{background:var(--ok)}.badge.err{background:var(--err)}
+.spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.info{padding:10px;font-size:13px;display:flex;flex-direction:column;gap:8px}
+.info p{margin:0;color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.acts a,.acts button{font-size:12px;padding:6px 10px;border-radius:8px;text-decoration:none;border:1px solid var(--line);color:var(--ink);background:transparent;font-weight:600}
+.err{color:var(--err)}
+.empty{color:var(--mut);text-align:center;padding:40px 0}
+#login{max-width:380px;margin:12vh auto}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div id="login" class="card hide">
+  <h1>Máquina de Reels</h1>
+  <p class="sub">Escreve a palavra-passe da app.</p>
+  <input id="pw" type="password" placeholder="Palavra-passe">
+  <div class="row"><button id="enter">Entrar</button></div>
+  <p id="lerr" class="err"></p>
+</div>
+
+<div id="app" class="wrap hide">
+  <h1>Máquina de Reels</h1>
+  <p class="sub">Escreve um tema. A app cria a imagem e o vídeo sozinha — podes fechar a página, o trabalho continua.</p>
+
+  <div class="card">
+    <textarea id="prompt" placeholder="Ex.: um gato de óculos escuros a conduzir um descapotável ao pôr do sol na costa"></textarea>
+    <div class="ideas" id="ideas"></div>
+    <div class="row">
+      <select id="count">
+        <option value="1">1 variação</option><option value="3">3 variações</option>
+        <option value="5">5 variações</option><option value="10">10 variações</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="video" checked> Criar também vídeo (5 s)</label>
+      <button id="go">Criar reels</button>
+    </div>
+    <p id="msg" class="stats"></p>
+  </div>
+
+  <div class="bar">
+    <h2>Trabalho feito</h2>
+    <span class="stats" id="stats"></span>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const IDEAS=["cão a fazer surf numa onda gigante","quedas de água em Angola desenhadas à mão sobre foto real","leão de fato e gravata a dar uma palestra motivacional","robô a cozinhar muamba de galinha","coruja a ler um livro numa biblioteca mágica"];
+let KEY="";
+try{KEY=localStorage.getItem("reels-key")||""}catch(e){}
+const $=id=>document.getElementById(id);
+const api=(p,o={})=>fetch("/api"+p,{...o,headers:{"x-app-key":KEY,"Content-Type":"application/json",...(o.headers||{})}});
+const LABEL={pending:"Na fila",img_wait:"A criar imagem",vid_pending:"Imagem pronta",vid_wait:"A criar vídeo",done:"Pronto",error:"Erro"};
+
+$("ideas").innerHTML=IDEAS.map(i=>`<span>${i}</span>`).join("");
+$("ideas").onclick=e=>{if(e.target.tagName==="SPAN")$("prompt").value=e.target.textContent};
+
+async function login(){
+  KEY=$("pw").value.trim();
+  const r=await api("/jobs");
+  if(r.status===401){$("lerr").textContent="Palavra-passe errada.";return}
+  try{localStorage.setItem("reels-key",KEY)}catch(e){}
+  show();
+}
+$("enter").onclick=login;$("pw").onkeydown=e=>{if(e.key==="Enter")login()};
+
+function show(){$("login").classList.add("hide");$("app").classList.remove("hide");load();setInterval(load,8000);setInterval(()=>api("/tick",{method:"POST"}).catch(()=>{}),15000)}
+
+$("go").onclick=async()=>{
+  const prompt=$("prompt").value.trim();
+  if(!prompt){$("msg").textContent="Escreve um tema primeiro.";return}
+  $("go").disabled=true;$("msg").textContent="A enviar…";
+  const r=await api("/jobs",{method:"POST",body:JSON.stringify({prompt,count:+$("count").value,video:$("video").checked})});
+  const d=await r.json();
+  $("go").disabled=false;
+  $("msg").textContent=r.ok?`${d.ids.length} pedido(s) em curso. Aparecem em baixo quando estiverem prontos.`:(d.error||"Erro");
+  load();
+};
+
+const f=(id,kind,dl)=>`/api/file/${id}/${kind}?k=${encodeURIComponent(KEY)}${dl?"&dl=1":""}`;
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+let last="";
+async function load(){
+  const r=await api("/jobs");if(!r.ok)return;
+  const {jobs}=await r.json();
+  const sig=JSON.stringify(jobs.map(j=>[j.id,j.state]));
+  const done=jobs.filter(j=>j.state==="done").length,open=jobs.filter(j=>!["done","error"].includes(j.state)).length;
+  $("stats").textContent=`${done} prontos · ${open} em curso`;
+  if(sig===last)return;last=sig;
+  if(!jobs.length){$("grid").innerHTML=`<div class="empty">Ainda não há nada. Cria o teu primeiro reel acima.</div>`;return}
+  $("grid").innerHTML=jobs.map(j=>{
+    let media=`<div class="spin"></div>`;
+    if(j.hasVideo)media=`<video src="${f(j.id,"video")}" poster="${j.hasImage?f(j.id,"image"):""}" muted loop playsinline controls preload="none"></video>`;
+    else if(j.hasImage)media=`<img src="${f(j.id,"image")}" alt="">`;
+    else if(j.state==="error")media=`<span class="err">✕</span>`;
+    const cls=j.state==="done"?"ok":j.state==="error"?"err":"";
+    return `<div class="job"><div class="media">${media}<span class="badge ${cls}">${LABEL[j.state]}</span></div>
+      <div class="info"><p title="${esc(j.prompt)}">${esc(j.prompt)}</p>
+      ${j.error?`<p class="err">${esc(j.error)}</p>`:""}
+      <div class="acts">
+        ${j.hasImage?`<a href="${f(j.id,"image",1)}">⬇ Imagem</a>`:""}
+        ${j.hasVideo?`<a href="${f(j.id,"video",1)}">⬇ Vídeo</a>`:""}
+        <button data-del="${j.id}">Apagar</button>
+      </div></div></div>`}).join("");
+}
+$("grid").onclick=async e=>{const id=e.target.dataset?.del;if(id&&confirm("Apagar este reel?")){await api("/job/"+id,{method:"DELETE"});last="";load()}};
+
+(async()=>{if(KEY){const r=await api("/jobs");if(r.ok)return show()}$("login").classList.remove("hide")})();
+</script>
+</body>
+</html>
